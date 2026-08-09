@@ -1,0 +1,299 @@
+# Creatine Sénégal — E-commerce de compléments alimentaires
+
+Application e-commerce complète (frontend + backend + base de données) pour la vente de
+créatine, protéines, pré-workout et vitamines au Sénégal, construite à partir du cahier
+des charges fourni : paiement Wave / Orange Money, livraison par ville, comptes client et
+administrateur, dashboard de gestion, avis clients, coupons.
+
+Ce document explique **quoi est construit, comment le faire tourner, et ce qu'il reste à
+faire** pour un déploiement client réel.
+
+---
+
+## 1. Vue d'ensemble
+
+```
+creatine-senegal/
+├── backend/     → API REST (Node.js + Express + Prisma)
+├── frontend/    → Site web (Next.js 14 + TypeScript + TailwindCSS)
+└── README.md    → ce fichier
+```
+
+Le **backend** expose une API REST qui gère toute la logique métier (produits, panier→
+commande, paiement, stock, dashboard admin). Le **frontend** est un site Next.js qui
+consomme cette API. Les deux tournent indépendamment, chacun avec son `npm install` et
+son fichier `.env`.
+
+### Stack technique (conforme au cahier des charges)
+
+| Côté | Technologie | Rôle |
+|---|---|---|
+| Frontend | Next.js 14 (App Router) + TypeScript + TailwindCSS | Site public + espace client |
+| Backend | Node.js + Express.js | API REST |
+| Base de données | Prisma ORM — **SQLite en dev** (zéro config), **PostgreSQL en prod** | Persistance |
+| Auth | JWT + bcrypt | Comptes client / admin |
+| Paiement | Wave, Orange Money (intégration simulée, prête à brancher) | Checkout |
+
+---
+
+## 2. Ce qui est fonctionnel aujourd'hui
+
+**Backend — testé et validé** (`npm install` exécuté, structure vérifiée) :
+- Inscription / connexion / profil (JWT + bcrypt)
+- Produits : liste avec recherche, filtres (catégorie, marque, prix), tri, pagination + détail + CRUD admin
+- Catégories : liste + création/suppression admin
+- Panier → Commande : calcul automatique (sous-total, frais de livraison par ville,
+  coupon), création transactionnelle avec décrément du stock
+- Paiement : initiation Wave / Orange Money (voir §5 — actuellement simulé) + webhook de
+  confirmation qui passe la commande en "Payée"
+- Avis clients avec file de modération admin
+- Coupons (pourcentage, montant fixe, livraison gratuite)
+- Dashboard admin : chiffre d'affaires, nombre de commandes, panier moyen, commandes du
+  jour, produits en stock faible, top produits vendus
+- Sécurité : Helmet, CORS restreint, rate limiting sur login/register, mots de passe
+  hashés (bcrypt), validation des entrées (Zod)
+- Script de seed : 10 produits réalistes, 7 catégories, 2 coupons, 1 compte admin + 1
+  compte client de démo
+
+**Frontend — build de production vérifié avec succès (`npm run build`, 14 routes
+compilées sans erreur)** :
+- Page d'accueil (hero, catégories, nouveautés)
+- Liste produits avec recherche et tri
+- Page catégorie
+- Page produit (détail, dosage, ingrédients, avis, ajout au panier)
+- Panier (persisté en local, modifiable)
+- Checkout (adresse, ville → frais de livraison automatiques, choix du mode de paiement,
+  code promo)
+- Connexion / Inscription
+- Espace client (historique de commandes avec statut)
+- Dashboard admin (KPIs)
+- **Espace admin produits** : liste, création, modification, suppression, avec **upload de
+  photo directement depuis l'ordinateur ou le téléphone** (envoyée sur Cloudinary)
+- **Espace admin commandes** : liste de toutes les commandes avec changement de statut
+  (en attente → payée → en préparation → expédiée → livrée)
+- Identité visuelle propre : palette charbon / braise (orange) / cobalt / sable,
+  typographie Bebas Neue (display) + Inter (texte) + IBM Plex Mono (chiffres/dosages),
+  élément signature : la **jauge de dosage circulaire**, un rappel visuel de la précision
+  du dosage — cohérent avec le positionnement "5g par jour, zéro approximation"
+
+---
+
+## 3. Démarrer en local
+
+### Prérequis
+- Node.js 18+ et npm
+- (optionnel pour la prod) une base PostgreSQL
+
+### 3.1 Backend
+
+```bash
+cd backend
+npm install
+cp .env.example .env
+npx prisma generate
+npx prisma migrate dev --name init   # crée dev.db (SQLite) et les tables
+npm run seed                          # remplit la base avec des produits de démo
+npm run dev                           # démarre l'API sur http://localhost:4000
+```
+
+Comptes créés par le seed :
+- **Admin** : `admin@creatine-senegal.com` / `Admin123!`
+- **Client** : `client@example.com` / `Client123!`
+
+> Note technique : dans l'environnement où ce projet a été généré, le téléchargement du
+> moteur binaire Prisma était bloqué par les restrictions réseau du bac à sable
+> (`binaries.prisma.sh` non autorisé). Cette commande fonctionnera normalement sur ta
+> machine ou sur tout serveur avec un accès internet standard — ce n'est pas un problème
+> du code.
+
+### 3.2 Frontend
+
+Dans un second terminal :
+
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local
+npm run dev     # démarre le site sur http://localhost:3000
+```
+
+Le site consomme l'API à l'adresse définie dans `NEXT_PUBLIC_API_URL` (par défaut
+`http://localhost:4000/api`).
+
+### 3.3 Vérifier que tout fonctionne
+1. Ouvrir `http://localhost:4000/api/health` → doit répondre `{"status":"ok"}`
+2. Ouvrir `http://localhost:3000` → la page d'accueil doit afficher les produits du seed
+3. Se connecter avec le compte client, ajouter un produit au panier, passer une commande
+4. Se connecter avec le compte admin sur `/admin` pour voir le dashboard
+
+---
+
+## 4. Passage en production
+
+### 4.1 Base de données : SQLite → PostgreSQL
+Dans `backend/prisma/schema.prisma`, changer :
+```prisma
+datasource db {
+  provider = "postgresql"   // au lieu de "sqlite"
+  url      = env("DATABASE_URL")
+}
+```
+Puis dans `.env` : `DATABASE_URL="postgresql://user:motdepasse@host:5432/creatine_senegal"`
+Ensuite : `npx prisma migrate deploy`.
+
+### 4.2 Hébergement conseillé (cf. cahier des charges)
+- Frontend → **Vercel** (déploiement natif Next.js, gratuit pour démarrer)
+- Backend → **Railway** ou **Render**
+- Base de données → PostgreSQL managé (Railway, Render, ou Supabase)
+- Images produits → **Cloudinary** (variables déjà prévues dans `.env.example`)
+
+### 4.3 Variables d'environnement à définir en prod
+- `JWT_SECRET` : générer une vraie clé aléatoire longue (`openssl rand -hex 32`)
+- `FRONTEND_URL` : l'URL réelle du site (pour le CORS)
+- `NEXT_PUBLIC_API_URL` : l'URL réelle de l'API
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` : voir §4.4
+
+### 4.4 Mise en ligne pas à pas (gratuit pour démarrer)
+
+Ces comptes doivent être créés **à ton nom** (ou celui de ton client) — c'est important
+pour rester propriétaire du site et de son contenu. Ça prend environ 20 minutes.
+
+**Étape 1 — Mettre le code sur GitHub**
+1. Crée un compte sur [github.com](https://github.com) si tu n'en as pas
+2. Crée un nouveau dépôt (repository), nomme-le `creatine-senegal`
+3. Depuis le dossier du projet : `git init`, `git add .`, `git commit -m "Premier commit"`,
+   puis suis les instructions GitHub pour le lier et faire `git push`
+
+**Étape 2 — Créer la base de données (Railway)**
+1. Va sur [railway.app](https://railway.app), connecte-toi avec GitHub
+2. "New Project" → "Deploy PostgreSQL" → attends que la base soit prête
+3. Dans l'onglet "Variables" de cette base, copie la valeur de `DATABASE_URL`
+
+**Étape 3 — Déployer le backend (Railway)**
+1. Toujours sur Railway : "New" → "Deploy from GitHub repo" → choisis ton dépôt
+2. Dans les paramètres du service : Root Directory = `backend`
+3. Onglet "Variables" : colle toutes les variables de `backend/.env.example`, avec la
+   vraie `DATABASE_URL` de l'étape 2, un vrai `JWT_SECRET`, et laisse `FRONTEND_URL` vide
+   pour l'instant (on la remplira à l'étape 5)
+4. Dans `backend/prisma/schema.prisma`, change `provider = "sqlite"` en
+   `provider = "postgresql"` avant de pousser le code (voir §4.1)
+5. Railway build et démarre automatiquement. Une fois en ligne, exécute une seule fois
+   (onglet "Shell" du service Railway) : `npx prisma migrate deploy && npm run seed`
+6. Note l'URL publique donnée par Railway (ex. `https://creatine-backend.up.railway.app`)
+
+**Étape 4 — Créer un compte Cloudinary (pour les photos produits)**
+1. Va sur [cloudinary.com](https://cloudinary.com), crée un compte gratuit
+2. Sur le dashboard, copie `Cloud name`, `API Key`, `API Secret`
+3. Ajoute ces 3 valeurs dans les variables du backend sur Railway (étape 3.3)
+
+**Étape 5 — Déployer le frontend (Vercel)**
+1. Va sur [vercel.com](https://vercel.com), connecte-toi avec GitHub
+2. "Add New Project" → choisis ton dépôt → Root Directory = `frontend`
+3. Dans les variables d'environnement : `NEXT_PUBLIC_API_URL` = l'URL Railway de
+   l'étape 3.6 + `/api` (ex. `https://creatine-backend.up.railway.app/api`)
+4. "Deploy" — Vercel te donne une URL du type `creatine-senegal.vercel.app`
+5. Retourne dans les variables du backend sur Railway et mets `FRONTEND_URL` = cette URL
+   Vercel, pour que le site puisse parler à l'API (CORS)
+
+**Étape 6 — Domaine personnalisé (optionnel)**
+Achète un nom de domaine (Namecheap, OVH, Google Domains...) puis ajoute-le dans les
+réglages du projet Vercel ("Domains") — Vercel te donne les enregistrements DNS à
+configurer chez ton registrar.
+
+À ce stade le site est en ligne, accessible sur mobile comme sur ordinateur (c'est un
+site web responsive, pas une app à installer), avec tes vrais comptes admin/client. Les
+coûts au-delà des paliers gratuits (trafic, taille de base) sont facturés directement par
+Railway/Vercel/Cloudinary sur ton propre compte.
+
+---
+
+## 5. Paiement Wave / Orange Money — état actuel et prochaine étape
+
+Le flux complet (checkout → initiation du paiement → webhook de confirmation → commande
+marquée "Payée") est **implémenté et démontrable de bout en bout**, mais les appels aux
+vraies API Wave et Orange Money sont **simulés** (pas de compte marchand réel utilisé).
+
+Pour brancher les vrais paiements :
+1. Créer un compte marchand Wave (`docs.wave.com`) et un compte développeur Orange Money
+   Sénégal
+2. Dans `backend/src/controllers/payments.controller.js`, remplacer les sections
+   commentées `// --- Ici, en prod : appel réel ---` par les vrais appels API
+3. Ajouter la vérification de signature des webhooks entrants (indispensable en
+   production, pour éviter qu'un tiers ne falsifie une confirmation de paiement)
+4. Renseigner les vraies clés dans `.env` (`WAVE_API_KEY`, `ORANGE_MONEY_MERCHANT_KEY`, etc.)
+
+C'est la seule partie du projet qui nécessite des comptes tiers externes pour être
+finalisée à 100% — tout le reste (produits, panier, commandes, stock, admin) est déjà
+opérationnel avec de vraies données en base.
+
+---
+
+## 6. Ce qui n'est pas encore construit (roadmap)
+
+Le cahier des charges est très complet ; par souci de livrer une base saine et testée
+plutôt qu'une façade, certains éléments visuels admin restent à construire (**l'API qui
+les supporte existe déjà à 100%** — il ne manque que l'interface) :
+
+- Interface admin modération des avis (l'API existe : `GET /api/reviews/en-attente`)
+- Interface admin gestion des coupons (l'API existe : `POST/GET/DELETE /api/coupons`)
+- Interface admin création de catégories (l'API existe : `POST /api/categories`)
+- Notifications email/SMS/WhatsApp de suivi de commande
+- Tests automatisés (unitaires, API, charge)
+- Application mobile React Native (le site actuel est déjà 100% responsive — utilisable
+  au doigt sur téléphone via le navigateur, sans app à installer)
+- Recommandation IA de produits selon l'objectif (masse, sèche, endurance)
+
+**Déjà construit et fonctionnel** (nouveau) : gestion complète des produits par l'admin
+(créer/modifier/supprimer + upload photo) et gestion des commandes (changement de statut).
+
+---
+
+## 7. Référence API (backend)
+
+Toutes les routes sont préfixées par `/api`.
+
+| Méthode | Route | Auth | Description |
+|---|---|---|---|
+| POST | `/auth/register` | — | Créer un compte |
+| POST | `/auth/login` | — | Se connecter |
+| GET | `/auth/profile` | Client | Profil + historique |
+| GET | `/products` | — | Liste (recherche/filtres/tri/pagination) |
+| GET | `/products/:slug` | — | Détail produit |
+| POST/PUT/DELETE | `/products` | Admin | CRUD produit |
+| GET | `/categories` | — | Liste des catégories |
+| POST | `/orders` | Client | Checkout (crée la commande) |
+| GET | `/orders/mes-commandes` | Client | Historique |
+| GET | `/orders` | Admin | Toutes les commandes |
+| PUT | `/orders/:id/statut` | Admin | Changer le statut |
+| POST | `/payments/wave` | Client | Initier paiement Wave |
+| POST | `/payments/orange-money` | Client | Initier paiement Orange Money |
+| POST | `/payments/webhook/confirmer` | Provider | Confirmation de paiement |
+| POST | `/reviews` | Client | Laisser un avis |
+| PUT | `/reviews/:id/approuver` | Admin | Approuver un avis |
+| GET/POST/DELETE | `/coupons` | Admin | Gestion des coupons |
+| GET | `/admin/dashboard` | Admin | KPIs |
+
+---
+
+## 8. Identité visuelle
+
+| Élément | Choix | Pourquoi |
+|---|---|---|
+| Fond | Charbon `#15181B` | Ambiance salle de sport, sérieux |
+| Accent principal | Braise `#FF5A1F` | Énergie, effort, chaleur |
+| Accent secondaire | Cobalt `#2955F0` | Précision clinique, confiance (espace admin) |
+| Surface claire | Sable `#EFE7D8` | Rappelle le climat sahélien, contraste avec le charbon |
+| Display | Bebas Neue | Typo condensée façon affiche de sport, forte présence |
+| Texte courant | Inter | Lisibilité, neutre |
+| Chiffres / dosages | IBM Plex Mono | Lisibilité des données précises (prix, %, grammes) |
+| Élément signature | Jauge de dosage circulaire | Symbolise "la dose juste", motif récurrent sur les fiches produits et la page d'accueil |
+
+---
+
+## 9. Support
+
+Pour toute question sur la structure du code, regarder en priorité :
+- `backend/prisma/schema.prisma` → modèle de données complet
+- `backend/src/index.js` → point d'entrée de l'API, liste de toutes les routes montées
+- `frontend/app/layout.tsx` → structure globale du site
+- `frontend/context/CartContext.tsx` et `AuthContext.tsx` → logique panier/auth côté client

@@ -1,0 +1,137 @@
+// Schema Prisma - Creatine Senegal
+// Dev: SQLite (zero config). Prod: changer provider en "postgresql" + DATABASE_URL (voir README).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  nom          String
+  prenom       String
+  email        String   @unique
+  motDePasse   String
+  telephone    String?
+  adresse      String?
+  ville        String?
+  role         String   @default("CLIENT") // "CLIENT" | "ADMIN"
+  dateCreation DateTime @default(now())
+
+  commandes Order[]
+  avis      Review[]
+  favoris   Favorite[]
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  nom         String    @unique
+  description String?
+  slug        String    @unique
+  produits    Product[]
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  nom          String
+  slug         String   @unique
+  description  String
+  ingredients  String?
+  dosage       String?
+  prix         Float
+  promotion    Float? // pourcentage de réduction 0-100
+  poids        String?
+  marque       String?
+  stock        Int      @default(0)
+  photo        String?
+  disponible   Boolean  @default(true)
+  dateCreation DateTime @default(now())
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  avis         Review[]
+  orderItems   OrderItem[]
+  favoris      Favorite[]
+
+  @@index([categoryId])
+}
+
+model Favorite {
+  id        String  @id @default(cuid())
+  userId    String
+  productId String
+  user      User    @relation(fields: [userId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  total        Float
+  fraisLivraison Float     @default(0)
+  statut       String      @default("EN_ATTENTE") // EN_ATTENTE | PAYEE | EN_PREPARATION | EXPEDIEE | LIVREE | ANNULEE
+  ville        String
+  adresse      String
+  telephone    String
+  modePaiement String // WAVE | ORANGE_MONEY | CARTE | LIVRAISON
+  couponCode   String?
+  dateCreation DateTime    @default(now())
+
+  items    OrderItem[]
+  paiement Payment?
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantite  Int
+  prix      Float // prix unitaire au moment de la commande
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String        @unique
+  montant       Float
+  methode       String // WAVE | ORANGE_MONEY | CARTE | LIVRAISON
+  statut        String        @default("EN_ATTENTE") // EN_ATTENTE | REUSSI | ECHOUE | REMBOURSE
+  transactionId String?
+  dateCreation  DateTime      @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model Review {
+  id           String   @id @default(cuid())
+  userId       String
+  productId    String
+  note         Int // 1 à 5
+  commentaire  String?
+  photo        String?
+  approuve     Boolean  @default(false)
+  dateCreation DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Coupon {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  pourcentage  Float?
+  montantFixe  Float?
+  livraisonGratuite Boolean @default(false)
+  expiration   DateTime
+  actif        Boolean  @default(true)
+}

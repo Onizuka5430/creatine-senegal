@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #15181b;
+  color: #efe7d8;
+}
+
+/* Focus clavier toujours visible, accessibilité */
+:focus-visible {
+  outline: 2px solid #ff5a1f;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.dosage-gauge {
+  --pct: 0%;
+  background: conic-gradient(#ff5a1f var(--pct), #2a2f33 var(--pct));
+}
