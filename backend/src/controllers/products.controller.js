@@ -137,7 +137,26 @@ async function update(req, res, next) {
 
 async function remove(req, res, next) {
   try {
-    await prisma.product.delete({ where: { id: req.params.id } });
+    const id = req.params.id;
+
+    // Un produit déjà commandé ne doit pas être supprimé pour de vrai — ça
+    // casserait l'historique des commandes passées. On le masque à la place
+    // (il n'apparaît plus sur la boutique, mais reste consultable dans les
+    // anciennes commandes).
+    const dejaCommande = await prisma.orderItem.count({ where: { productId: id } });
+    if (dejaCommande > 0) {
+      await prisma.product.update({ where: { id }, data: { disponible: false } });
+      return res.json({
+        masque: true,
+        message:
+          "Ce produit a déjà été commandé au moins une fois : il a été masqué de la boutique au lieu d'être supprimé, pour garder l'historique des commandes intact.",
+      });
+    }
+
+    // Sinon, on peut le supprimer proprement (et nettoyer ses avis/favoris associés).
+    await prisma.review.deleteMany({ where: { productId: id } });
+    await prisma.favorite.deleteMany({ where: { productId: id } });
+    await prisma.product.delete({ where: { id } });
     res.status(204).end();
   } catch (err) {
     next(err);

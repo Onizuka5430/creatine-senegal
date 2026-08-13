@@ -29,8 +29,18 @@ export default function AdminProduitsPage() {
 
   async function supprimer(id: string) {
     if (!confirm("Supprimer ce produit définitivement ?")) return;
-    await api(`/products/${id}`, { method: "DELETE", token });
-    charger();
+    try {
+      const resultat = await api<{ masque?: boolean; message?: string }>(`/products/${id}`, {
+        method: "DELETE",
+        token,
+      });
+      if (resultat?.masque) {
+        alert(resultat.message);
+      }
+      charger();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erreur lors de la suppression du produit.");
+    }
   }
 
   if (loading) return null;
