@@ -1,5 +1,32 @@
 const prisma = require("../config/prisma");
 
+// Construit le message WhatsApp pré-rempli envoyé à l'admin quand une commande est validée.
+function construireMessageWhatsapp(order, user) {
+  const lignes = order.items
+    .map((it) => `- ${it.product.nom} x${it.quantite} (${(it.prix * it.quantite).toLocaleString("fr-FR")} F)`)
+    .join("\n");
+
+  return (
+    `Nouvelle commande #${order.id.slice(-8).toUpperCase()}\n\n` +
+    `Client : ${user.prenom} ${user.nom}\n` +
+    `Téléphone : ${order.telephone}\n` +
+    `Ville : ${order.ville}\n` +
+    `Adresse : ${order.adresse}\n\n` +
+    `Articles :\n${lignes}\n\n` +
+    `Livraison : ${order.fraisLivraison.toLocaleString("fr-FR")} F\n` +
+    `Total : ${order.total.toLocaleString("fr-FR")} F CFA\n` +
+    `Paiement : ${order.modePaiement}`
+  );
+}
+
+async function construireLienWhatsapp(order, user) {
+  const settings = await prisma.storeSettings.findUnique({ where: { id: "main" } });
+  if (!settings?.whatsapp) return null;
+
+  const message = construireMessageWhatsapp(order, user);
+  return `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(message)}`;
+}
+
 // Frais de livraison simplifiés par ville (à ajuster selon les tarifs réels transporteur)
 const FRAIS_LIVRAISON = {
   dakar: 1500,
@@ -94,7 +121,12 @@ async function checkout(req, res, next) {
       return nouvelleCommande;
     });
 
-    res.status(201).json(order);
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+
+    res.status(201).json({
+      ...order,
+      whatsappUrl: await construireLienWhatsapp(order, user),
+    });
   } catch (err) {
     next(err);
   }

@@ -58,7 +58,7 @@ export default function CheckoutPage() {
     setEnvoi(true);
 
     try {
-      const commande = await api<{ id: string }>("/orders", {
+      const commande = await api<{ id: string; whatsappUrl: string | null }>("/orders", {
         method: "POST",
         token,
         body: {
@@ -78,7 +78,10 @@ export default function CheckoutPage() {
       }
 
       vider();
-      router.push(`/compte?commande=${commande.id}`);
+      const params = commande.whatsappUrl
+        ? `?whatsapp=${encodeURIComponent(commande.whatsappUrl)}`
+        : "";
+      router.push(`/commande/confirmee${params}`);
     } catch (err) {
       setErreur(err instanceof Error ? err.message : "Erreur lors de la commande.");
     } finally {

@@ -52,8 +52,11 @@ son fichier `.env`.
   jour, produits en stock faible, top produits vendus
 - Sécurité : Helmet, CORS restreint, rate limiting sur login/register, mots de passe
   hashés (bcrypt), validation des entrées (Zod)
-- Script de seed : 10 produits réalistes, 7 catégories, 2 coupons, 1 compte admin + 1
-  compte client de démo
+- **Boutique livrée vierge** : aucun produit de démonstration. Seules les 7 catégories
+  du cahier des charges sont pré-créées (structure de la boutique) — tout le reste est
+  à ajouter par l'admin via `/admin/produits`
+- **Identifiants admin réels** : définis par toi via des variables d'environnement
+  (`ADMIN_EMAIL`, `ADMIN_PASSWORD`), pas de mot de passe codé en dur dans le projet
 
 **Frontend — build de production vérifié avec succès (`npm run build`, 14 routes
 compilées sans erreur)** :
@@ -71,6 +74,11 @@ compilées sans erreur)** :
   photo directement depuis l'ordinateur ou le téléphone** (envoyée sur Cloudinary)
 - **Espace admin commandes** : liste de toutes les commandes avec changement de statut
   (en attente → payée → en préparation → expédiée → livrée)
+- **Espace admin paramètres** : nom de la boutique + numéro WhatsApp
+- **Commande → WhatsApp** : quand un client valide sa commande, un onglet WhatsApp
+  s'ouvre automatiquement avec un message pré-rempli (produits, quantités, total,
+  adresse, téléphone) adressé au numéro WhatsApp de la boutique — le client n'a plus
+  qu'à appuyer sur "Envoyer"
 - Identité visuelle propre : palette charbon / braise (orange) / cobalt / sable,
   typographie Bebas Neue (display) + Inter (texte) + IBM Plex Mono (chiffres/dosages),
   élément signature : la **jauge de dosage circulaire**, un rappel visuel de la précision
@@ -90,20 +98,35 @@ compilées sans erreur)** :
 cd backend
 npm install
 cp .env.example .env
+```
+
+**Avant d'aller plus loin, ouvre `backend/.env` et personnalise ces valeurs** :
+```
+ADMIN_EMAIL="contact@taboutique.com"        → le vrai email de connexion admin
+ADMIN_PASSWORD="ChangeMoiEnUnMotDePasseSolide123!"  → un vrai mot de passe (8+ caractères)
+ADMIN_NOM="Diop"
+ADMIN_PRENOM="Amadou"
+BOUTIQUE_NOM="Nom de la boutique"
+BOUTIQUE_WHATSAPP="221771234567"            → numéro WhatsApp qui recevra les commandes
+                                               (indicatif pays sans + ni espaces)
+```
+
+Puis :
+```bash
 npx prisma generate
 npx prisma migrate dev --name init   # crée dev.db (SQLite) et les tables
-npm run seed                          # remplit la base avec des produits de démo
+npm run seed                          # crée le compte admin + les catégories (aucun produit de démo)
 npm run dev                           # démarre l'API sur http://localhost:4000
 ```
 
-Comptes créés par le seed :
-- **Admin** : `admin@creatine-senegal.com` / `Admin123!`
-- **Client** : `client@example.com` / `Client123!`
+Le compte admin est désormais **celui que tu as choisi** dans `ADMIN_EMAIL` /
+`ADMIN_PASSWORD` — connecte-toi avec ces identifiants sur `/connexion`, puis va sur
+`/admin/produits` pour ajouter les vrais produits (nom, prix, stock, photo).
 
 > Note technique : dans l'environnement où ce projet a été généré, le téléchargement du
 > moteur binaire Prisma était bloqué par les restrictions réseau du bac à sable
-> (`binaries.prisma.sh` non autorisé). Cette commande fonctionnera normalement sur ta
-> machine ou sur tout serveur avec un accès internet standard — ce n'est pas un problème
+> (`binaries.prisma.sh` non autorisé). Ces commandes fonctionnent normalement sur ta
+> machine ou tout serveur avec un accès internet standard — ce n'est pas un problème
 > du code.
 
 ### 3.2 Frontend
@@ -122,9 +145,13 @@ Le site consomme l'API à l'adresse définie dans `NEXT_PUBLIC_API_URL` (par dé
 
 ### 3.3 Vérifier que tout fonctionne
 1. Ouvrir `http://localhost:4000/api/health` → doit répondre `{"status":"ok"}`
-2. Ouvrir `http://localhost:3000` → la page d'accueil doit afficher les produits du seed
-3. Se connecter avec le compte client, ajouter un produit au panier, passer une commande
-4. Se connecter avec le compte admin sur `/admin` pour voir le dashboard
+2. Ouvrir `http://localhost:3000` → la page d'accueil s'affiche (vide au départ, c'est normal — aucun produit de démo)
+3. Se connecter sur `/connexion` avec les identifiants `ADMIN_EMAIL` / `ADMIN_PASSWORD` définis dans `backend/.env`
+4. Aller sur `/admin/produits` → "+ Ajouter un produit" → remplir nom, description, prix,
+   stock, catégorie, et uploader une photo (nécessite Cloudinary configuré, voir §4.4)
+5. Aller sur `/admin/parametres` → renseigner le numéro WhatsApp de la boutique
+6. Retourner sur le site, ajouter le produit au panier, passer une commande → un onglet
+   WhatsApp doit s'ouvrir avec la commande pré-remplie
 
 ---
 
@@ -152,6 +179,10 @@ Ensuite : `npx prisma migrate deploy`.
 - `FRONTEND_URL` : l'URL réelle du site (pour le CORS)
 - `NEXT_PUBLIC_API_URL` : l'URL réelle de l'API
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` : voir §4.4
+- `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NOM`, `ADMIN_PRENOM` : les vrais identifiants
+  admin (utilisés une seule fois, au moment du `npm run seed`)
+- `BOUTIQUE_NOM`, `BOUTIQUE_WHATSAPP` : réglages initiaux (modifiables ensuite dans
+  `/admin/parametres`, pas besoin de les changer ici après coup)
 
 ### 4.4 Mise en ligne pas à pas (gratuit pour démarrer)
 
@@ -171,15 +202,25 @@ pour rester propriétaire du site et de son contenu. Ça prend environ 20 minute
 
 **Étape 3 — Déployer le backend (Railway)**
 1. Toujours sur Railway : "New" → "Deploy from GitHub repo" → choisis ton dépôt
-2. Dans les paramètres du service : Root Directory = `backend`
-3. Onglet "Variables" : colle toutes les variables de `backend/.env.example`, avec la
-   vraie `DATABASE_URL` de l'étape 2, un vrai `JWT_SECRET`, et laisse `FRONTEND_URL` vide
-   pour l'instant (on la remplira à l'étape 5)
+2. Dans les paramètres du service (onglet "Settings") : Root Directory = `backend`
+3. Onglet "Variables" : ajoute toutes les variables de `backend/.env.example`, avec la
+   vraie `DATABASE_URL` de l'étape 2, un vrai `JWT_SECRET`, de vrais `ADMIN_EMAIL` /
+   `ADMIN_PASSWORD`, et laisse `FRONTEND_URL` sur `http://localhost:3000` pour l'instant
+   (on la remplira à l'étape 6)
 4. Dans `backend/prisma/schema.prisma`, change `provider = "sqlite"` en
-   `provider = "postgresql"` avant de pousser le code (voir §4.1)
-5. Railway build et démarre automatiquement. Une fois en ligne, exécute une seule fois
-   (onglet "Shell" du service Railway) : `npx prisma migrate deploy && npm run seed`
-6. Note l'URL publique donnée par Railway (ex. `https://creatine-backend.up.railway.app`)
+   `provider = "postgresql"`, **supprime le dossier `backend/prisma/migrations`** s'il a
+   été généré en SQLite (sinon Prisma refuse de le réutiliser en PostgreSQL), puis pousse
+   le code (`git add .`, `git commit`, `git push`)
+5. Railway build et démarre automatiquement. Une fois le déploiement vert (onglet
+   "Deployments"), ouvre l'onglet "Console" et exécute :
+   ```
+   npx prisma db push
+   npm run seed
+   ```
+   Le seed crée ton compte admin (avec les vrais `ADMIN_EMAIL`/`ADMIN_PASSWORD` définis
+   à l'étape 3) et les catégories — **aucun produit de démo**, la boutique est vierge.
+6. Génère un domaine public : onglet "Settings" → section "Networking" → "Generate
+   Domain". Note l'URL (ex. `https://creatine-backend.up.railway.app`)
 
 **Étape 4 — Créer un compte Cloudinary (pour les photos produits)**
 1. Va sur [cloudinary.com](https://cloudinary.com), crée un compte gratuit
@@ -201,9 +242,14 @@ réglages du projet Vercel ("Domains") — Vercel te donne les enregistrements D
 configurer chez ton registrar.
 
 À ce stade le site est en ligne, accessible sur mobile comme sur ordinateur (c'est un
-site web responsive, pas une app à installer), avec tes vrais comptes admin/client. Les
-coûts au-delà des paliers gratuits (trafic, taille de base) sont facturés directement par
-Railway/Vercel/Cloudinary sur ton propre compte.
+site web responsive, pas une app à installer), avec ton vrai compte admin et une
+boutique vierge prête à recevoir les produits. Les coûts au-delà des paliers gratuits
+(trafic, taille de base) sont facturés directement par Railway/Vercel/Cloudinary sur ton
+propre compte.
+
+**Ajouter les produits une fois en ligne** : connecte-toi sur le site avec `ADMIN_EMAIL`
+/ `ADMIN_PASSWORD`, va sur `/admin/produits` pour ajouter les produits (photos comprises),
+puis sur `/admin/parametres` pour vérifier que le numéro WhatsApp est bien enregistré.
 
 ---
 
@@ -272,6 +318,9 @@ Toutes les routes sont préfixées par `/api`.
 | PUT | `/reviews/:id/approuver` | Admin | Approuver un avis |
 | GET/POST/DELETE | `/coupons` | Admin | Gestion des coupons |
 | GET | `/admin/dashboard` | Admin | KPIs |
+| POST | `/upload` | Admin | Upload d'une image (retourne l'URL Cloudinary) |
+| GET | `/settings` | — | Nom boutique + numéro WhatsApp |
+| PUT | `/settings` | Admin | Modifier ces réglages |
 
 ---
 

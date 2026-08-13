@@ -77,10 +77,6 @@ function ConnexionForm() {
             Inscrivez-vous
           </Link>
         </p>
-
-        <p className="font-mono text-xs text-sable/30 text-center mt-4">
-          Démo : admin@creatine-senegal.com / Admin123! — client@example.com / Client123!
-        </p>
       </form>
     </div>
   );

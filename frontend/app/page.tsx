@@ -109,8 +109,8 @@ export default async function HomePage() {
 
         {produits.length === 0 ? (
           <div className="border border-dashed border-charbon-line rounded-sm p-10 text-center text-sable/50 font-body">
-            Aucun produit pour le moment. Lancez l'API et le seed pour peupler la boutique
-            (voir README).
+            La boutique n'a pas encore de produits en ligne. Connecte-toi en tant
+            qu'administrateur pour ajouter le premier.
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-5">

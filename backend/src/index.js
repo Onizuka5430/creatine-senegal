@@ -17,6 +17,7 @@ const reviewsRoutes = require("./routes/reviews.routes");
 const couponsRoutes = require("./routes/coupons.routes");
 const adminRoutes = require("./routes/admin.routes");
 const uploadRoutes = require("./routes/upload.routes");
+const settingsRoutes = require("./routes/settings.routes");
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use("/api/reviews", reviewsRoutes);
 app.use("/api/coupons", couponsRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/settings", settingsRoutes);
 
 // 404
 app.use((req, res) => res.status(404).json({ message: "Route introuvable." }));

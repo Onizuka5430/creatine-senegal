@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -134,4 +134,13 @@ model Coupon {
   livraisonGratuite Boolean @default(false)
   expiration   DateTime
   actif        Boolean  @default(true)
+}
+
+// Réglages de la boutique — une seule ligne (id fixe "main").
+// Contient le numéro WhatsApp de l'admin, utilisé pour recevoir les commandes.
+model StoreSettings {
+  id          String   @id @default("main")
+  nomBoutique String   @default("Ma Boutique")
+  whatsapp    String? // format international sans espaces ni +, ex: "221771234567"
+  updatedAt   DateTime @updatedAt
 }
